@@ -3,32 +3,38 @@ title: "R Notebook"
 output: html_notebook
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
-
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
-
 ```{r}
 library(RColorBrewer)
 ```
 
-
+Carga de datos
 
 ```{r}
-data = read.csv("COMBO17.csv",header=T)
+data = read.csv("datos/wine.data",header=F)
 attach(data)
 ```
+
+Nombramos los campos del DataSet ya que no se encuentran en el archivo de entrada
+
+```{r}
+namelist <- c('class','Alcohol','Malic acid','Ash','Alcalinity of ash','Magnesium','Total phenols','Flavanoids','Nonflavanoid phenols','Proanthocyanins','Color intensity','Hue','OD280/OD315 of diluted wines','Proline')
+
+colnames(data) <- namelist
+```
+
+Vemos la dimensión de los datos
+
 ```{r}
 dim(data)
 ```
 
-```{r}
-names(data)
-```
+Exploración de la estructura del DataSet
 
 ```{r}
 str(data)
 ```
 
+Definimos la función para normalizar los datos, en este caso utilizamos MinMax.
 
 ```{r}
 normalize <- function(x) {
@@ -36,38 +42,252 @@ normalize <- function(x) {
 }
 ```
 
+Aplicamos la normalización a los datos, ignoramos la columna 1 ya que la misma corresponde a las clases que queremos identificar. Luego, añadimos la columna "class" para el análisis siguiente.
+
 ```{r}
-data[31]
+data_normed <- as.data.frame(lapply(data[c(2:ncol(data))], normalize))
+data_normed$class <- data$class
+str(data_normed)
 ```
 
-```{r}
-```
-
-
+Graficamos Boxplots
 
 ```{r}
-data_n <- as.data.frame(lapply(data[c(2:30,32:ncol(data))], normalize))
-str(data_n)
-```
-
-
-
-
-```{r}
-m = as.matrix(data_n[,20:2])
+m = as.matrix(data_normed[1:ncol(data_normed)-1])
 
 cols  <- colorRampPalette(brewer.pal(12, "Set3"), alpha=TRUE)(ncol(m))
 colsm <-matrix(rep(cols, each=nrow(m)), ncol=ncol(m))
 
 boxplot(m~col(m), horizontal=TRUE, outline=TRUE, lty=1, staplewex=0, boxwex=0.8, boxlwd=1, medlwd=1, col=cols, xaxt="n", yaxt="n")
-cols
+
+# add axes and title
+axis(side=1, at=seq(0,100,by=10), cex.axis=0.8, lty=0, tick=NA, line=-1)
+axis(side=1, at=50, labels="Assigned Probability %", lty=0, tick=NA)
+axis(side=2, at=1:13, cex.axis=0.8, lty=0, tick=NA, labels=colnames(m), las=2)
+axis(side=2, at=17/2, labels="Phrase", lty=0, tick=NA, las=3, line=6)
+title("Perceptions of Probability")
+```
+
+Definimos una función para hacer la remoción de los outliers
+
+```{r}
+removeOutliers <- function(data,n=3){
+  f <- !logical(length = nrow(data))
+  for (c in colnames(data)) {
+    x <- data[[c]]
+    g <- x > quantile(x,.25) - 0.5*n*IQR(x) & x < quantile(x,.75) + 0.5*n*IQR(x)
+    f <- f & g
+  }
+  return(f)
+}
+```
+
+Removemos outliers que se encuentran más allá de +/- 1.5*IQR(x) del primer y tercer cuartil.
+
+```{r}
+filters <- removeOutliers(data_normed[1:ncol(data_normed)-1])
+data_cleaned <- subset(data_normed,filters)
+```
+
+Re-dibujamos los boxplots y observamos que los outiliers más marcados se fueron
+
+```{r}
+m = as.matrix(data_cleaned[1:ncol(data_cleaned)-1])
+
+cols  <- colorRampPalette(brewer.pal(12, "Set3"), alpha=TRUE)(ncol(m))
+colsm <-matrix(rep(cols, each=nrow(m)), ncol=ncol(m))
+
+boxplot(m~col(m), horizontal=TRUE, outline=TRUE, lty=1, staplewex=0, boxwex=0.8, boxlwd=1, medlwd=1, col=cols, xaxt="n", yaxt="n")
+
+# add axes and title
+axis(side=1, at=seq(0,100,by=10), cex.axis=0.8, lty=0, tick=NA, line=-1)
+axis(side=1, at=50, labels="Assigned Probability %", lty=0, tick=NA)
+axis(side=2, at=1:13, cex.axis=0.8, lty=0, tick=NA, labels=colnames(m), las=2)
+axis(side=2, at=17/2, labels="Phrase", lty=0, tick=NA, las=3, line=6)
+title("Perceptions of Probability")
+```
+
+Plot del DataSet coloreado por las clases
+
+```{r}
+plot(data_cleaned[, 1:ncol(data_cleaned)-1], col = data_cleaned$class, pch = 18, main = "Wine Dataset")
+```
+
+Aplicamos clustering jeráctico del paquete mclust, con nclusters = 3
+
+```{r}
+library(mclust)
+
+initialk <- mclust::hc(data = data_cleaned, modelName = "EII")
+initialk <- mclust::hclass(initialk,3)
 ```
 
 
+```{r echo=TRUE}
+mcl.model <- Mclust(data_cleaned[, 1:ncol(data_cleaned)-1], 3,verbose=TRUE)
+plot(mcl.model, what = "classification", main = "Mclust Classification")
+```
+
+Posición de los centroides
+
+```{r}
+mcl.model$parameters$mean
+```
+
+Tabla de comparación
+
+```{r}
+table(mcl.model$classification, data_cleaned$class)
+```
+
+Computamos el error del clustering
+
+```{r}
+classError(mcl.model$classification,data_cleaned$class)
+```
+
+```{r}
+library(cluster)
+
+sil <- silhouette(mcl.model$classification, dist(data_cleaned))
+plot(sil, main ="Silhouette plot - Hierarchical Clustering")
+```
+
+Calculamos el clustering variando el número de clusters y graficamos el error vs el número de clusters
+
+```{r echo=TRUE}
+
+Ks <- vector()
+cError <- vector()
+
+for(k in 1:5){
+  mcl.model <- Mclust(data_cleaned[, 1:ncol(data_cleaned)-1], k,verbose=FALSE)
+  Ks <- append(Ks,k)
+  cError <- append(cError,classError(mcl.model$classification,data_cleaned$class)$errorRate)
+}
+
+print(Ks)
+print(cError)
+plot(Ks,cError)
+```
+
+Aplicamos el algoritmo de Kmeans con k = 3
+
+```{r echo=TRUE}
+set.seed(20)
+DataCluster <- kmeans(data_cleaned[, 1:ncol(data_cleaned)-1], 3, nstart = 20)
+DataCluster
+```
+
+Tabla de comparación
 
 
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+```{r}
+table(DataCluster$cluster, data_cleaned$class)
+```
 
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+Error
 
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+```{r}
+classError(DataCluster$cluster,data_cleaned$class)
+```
+
+```{r}
+sil <- silhouette(DataCluster$cluster, dist(data_cleaned))
+plot(sil, main ="Silhouette plot - Hierarchical Clustering")
+```
+
+Aplicamos Kmeans variando el número de K
+
+```{r echo=TRUE}
+
+Ks <- vector()
+cError <- vector()
+
+for(k in 1:5){
+  DataCluster <- kmeans(data_cleaned[, 1:ncol(data_cleaned)-1], k, nstart = 20)
+  Ks <- append(Ks,k)
+  cError <- append(cError,classError(DataCluster$cluster,data_cleaned$class)$errorRate)
+}
+
+print(Ks)
+print(cError)
+plot(Ks,cError)
+```
+
+Empleando esta métrica para el error se observa que el mismo disminuye a medida que aumentamos el número de clusters que se quieren identificar hasta llegar al valor de clusters igual a 3 (que se corresponde con la cantidad que está en la DataSet). Luego, para 4 y 5 cluster el error vuelve a aumentar.
+
+Ahora queremos ver que sucede con los datos limpiados por outliers pero sin la normalización.
+
+```{r}
+filters = removeOutliers(data[2:ncol(data)])
+data_raw_cleaned <- subset(data,filters)
+```
+
+```{r echo=TRUE}
+set.seed(10)
+DataCluster <- kmeans(data_raw_cleaned[, 2:ncol(data_raw_cleaned)], 3, nstart = 20)
+```
+
+```{r}
+table(DataCluster$cluster, data_raw_cleaned$class)
+```
+
+```{r}
+classError(DataCluster$cluster,data_raw_cleaned$class)
+```
+
+Comparación normalizado vs no-normalizado
+
+```{r echo=TRUE}
+
+Ks_unnormed <- vector()
+cError_unnormed <- vector()
+
+for(k in 1:5){
+  DataCluster <- kmeans(data_raw_cleaned[, 2:ncol(data_raw_cleaned)], k, nstart = 20)
+  Ks_unnormed <- append(Ks_unnormed,k)
+  cError_unnormed <- append(cError_unnormed,classError(DataCluster$cluster,data_raw_cleaned$class)$errorRate)
+}
+
+print(Ks)
+print(Ks_unnormed)
+
+print(cError)
+print(cError_unnormed)
+
+plot(c(Ks,Ks_unnormed),c(cError,cError_unnormed),col = rep(c('forestgreen','blue'),each = 6))
+```
+
+Silhouette coefficient
+
+The silhouette analysis measures how well an observation is clustered and it estimates the average distance between clusters. The silhouette plot displays a measure of how close each point in one cluster is to points in the neighboring clusters.
+
+For each observation i, the silhouette width si is calculated as follows:
+
+  For each observation i, calculate the average dissimilarity ai between i and all other points of the cluster to which i belongs.
+  For all other clusters C, to which i does not belong, calculate the average dissimilarity d(i,C) of i to all observations of C. The smallest of these d(i,C) is defined as bi=minCd(i,C). The value of bi can be seen as the dissimilarity between i and its “neighbor” cluster, i.e., the nearest one to which it does not belong.
+  Finally the silhouette width of the observation i is defined by the formula: Si=(bi−ai)/max(ai,bi).
+  
+Silhouette width can be interpreted as follow:
+
+  Observations with a large Si (almost 1) are very well clustered.
+  A small Si (around 0) means that the observation lies between two clusters.
+  Observations with a negative Si are probably placed in the wrong cluster.
+
+
+```{r}
+silhouette_score <- function(k){
+  km <- kmeans(data_cleaned, centers = k, nstart=25)
+  ss <- silhouette(km$cluster, dist(data_cleaned))
+  mean(ss[, 3])
+}
+
+k <- 2:10
+avg_sil <- sapply(k, silhouette_score)
+plot(k, type='b', avg_sil, xlab='Number of clusters', ylab='Average Silhouette Scores', frame=FALSE)
+```
+
+Se observa que el mejor score se obtiene para k = 3.
+
+
