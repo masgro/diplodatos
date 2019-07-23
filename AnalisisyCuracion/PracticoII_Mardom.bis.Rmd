@@ -107,10 +107,9 @@ boxplot(m~col(m), horizontal=TRUE, outline=TRUE, lty=1, staplewex=0, boxwex=0.8,
 
 # add axes and title
 axis(side=1, at=seq(0,1,by=0.1), cex.axis=0.8, lty=0, tick=NA, line=-1)
-axis(side=1, at=0.5, labels="Assigned Probability %", lty=0, tick=NA)
+axis(side=1, at=0.5, labels="Distribución normalizada", lty=0, tick=NA)
 axis(side=2, at=1:13, cex.axis=0.8, lty=0, tick=NA, labels=colnames(m), las=2)
-axis(side=2, at=7/2, labels="Phrase", lty=0, tick=NA, las=3, line=6)
-title("Perceptions of Probability")
+axis(side=2, at=7/2, labels="Variable", lty=0, tick=NA, las=3, line=6)
 ```
 
 Plot del DataSet coloreado por las clases
@@ -153,24 +152,23 @@ table(mcl.model$classification, data_cleaned$class)
 Computamos el error del clustering
 
 ```{r}
-classError(mcl.model$classification,data_cleaned$class)
+error <- classError(mcl.model$classification,data_cleaned$class)
+print(error)
 ```
 
 Calculamos el clustering variando el número de clusters y graficamos el error vs el número de clusters
 ```{r}
 
-Ks <- vector()
-cError <- vector()
+Ks_mclust <- vector()
+cError_mclust <- vector()
 
-for(k in 1:5){
+for(k in 1:6){
   mcl.model <- Mclust(data_cleaned[, 1:ncol(data_cleaned)-1], k,verbose=FALSE)
-  Ks <- append(Ks,k)
-  cError <- append(cError,classError(mcl.model$classification,data_cleaned$class)$errorRate)
+  Ks_mclust <- append(Ks_mclust,k)
+  cError_mclust <- append(cError_mclust,classError(mcl.model$classification,data_cleaned$class)$errorRate)
 }
 
-print(Ks)
-print(cError)
-plot(Ks,cError)
+plot(Ks_mclust,cError_mclust,xlab="Número de grupos",ylab="Error")
 ```
 
 Aplicamos el algoritmo de Kmeans con k = 3
@@ -182,8 +180,6 @@ DataCluster
 ```
 
 Tabla de comparación
-
-
 ```{r}
 table(DataCluster$cluster, data_cleaned$class)
 ```
@@ -191,26 +187,30 @@ table(DataCluster$cluster, data_cleaned$class)
 Error
 
 ```{r}
-classError(DataCluster$cluster,data_cleaned$class)
+error <- classError(DataCluster$cluster,data_cleaned$class)
+print(error)
 ```
 
 Aplicamos Kmeans variando el número de K
 
 ```{r echo=TRUE}
 
-Ks <- vector()
-cError <- vector()
+Ks_kmeans <- vector()
+cError_kmeans <- vector()
 
-for(k in 1:5){
+for(k in 1:6){
   DataCluster <- kmeans(data_cleaned[, 1:ncol(data_cleaned)-1], k, nstart = 20)
-  Ks <- append(Ks,k)
-  cError <- append(cError,classError(DataCluster$cluster,data_cleaned$class)$errorRate)
+  Ks_kmeans <- append(Ks_kmeans,k)
+  cError_kmeans <- append(cError_kmeans,classError(DataCluster$cluster,data_cleaned$class)$errorRate)
 }
 
-print(Ks)
-print(cError)
-plot(Ks,cError)
+plot(Ks_mclust,cError_mclust,col = 'forestgreen',xlab = "Número de grupos",ylab = "Error")
+points(Ks_kmeans,cError_kmeans,col = 'blue')
+legend("topright", inset=.05, title="Algoritmo", c("Mclust","Kmeans"), fill=c('forestgreen','blue'), horiz=TRUE)
+
 ```
+
+
 
 Empleando esta métrica para el error se observa que el mismo disminuye a medida que aumentamos el número de clusters que se quieren identificar hasta llegar al valor de clusters igual a 3 (que se corresponde con la cantidad que está en la DataSet). Luego, para 4 y 5 cluster el error vuelve a aumentar.
 
@@ -230,9 +230,12 @@ DataCluster <- kmeans(data_raw_cleaned[, 2:ncol(data_raw_cleaned)], 3, nstart = 
 table(DataCluster$cluster, data_raw_cleaned$class)
 ```
 
+
 ```{r}
 classError(DataCluster$cluster,data_raw_cleaned$class)
 ```
+
+Observamos que los valores mal clasificados aumentaron, como así también el error en casi un orden de magnitud respecto a la clasificación utilizando los datos normalizados.
 
 Comparación normalizado vs no-normalizado
 
@@ -241,20 +244,19 @@ Comparación normalizado vs no-normalizado
 Ks_unnormed <- vector()
 cError_unnormed <- vector()
 
-for(k in 1:5){
+for(k in 2:6){
   DataCluster <- kmeans(data_raw_cleaned[, 2:ncol(data_raw_cleaned)], k, nstart = 20)
   Ks_unnormed <- append(Ks_unnormed,k)
   cError_unnormed <- append(cError_unnormed,classError(DataCluster$cluster,data_raw_cleaned$class)$errorRate)
 }
 
-print(Ks)
-print(Ks_unnormed)
+plot(Ks_kmeans,cError_kmeans,col = 'forestgreen',xlab = "Número de grupos",ylab = "Error")
+points(Ks_unnormed,cError_unnormed,col = 'blue')
+legend("topright", inset=.05, title="Muestra", c("Normalizada","Sin Normalizar"), fill=c('forestgreen','blue'), horiz=TRUE)
 
-print(cError)
-print(cError_unnormed)
-
-plot(c(Ks,Ks_unnormed),c(cError,cError_unnormed),col = rep(c('forestgreen','blue'),each = 6))
 ```
+En la mayoría de los casos utilizando los datos sin normalizar aumenta el error.
+
 
 Determinando el número óptimo de grupos
 
@@ -266,6 +268,8 @@ Para ello utilizaremos el coeficiente Silhouette (Si) que mide que tan agrupada 
 Como queremos determinar el coeficiente Silhouette variando el hiperparámetro K (número de grupos) lo que graficaremos será el valor medio de Si para todas las observaciones en función de K
 
 ```{r}
+library(cluster)
+
 silhouette_score <- function(k){
   km <- kmeans(data_cleaned, centers = k, nstart=25)
   ss <- silhouette(km$cluster, dist(data_cleaned))

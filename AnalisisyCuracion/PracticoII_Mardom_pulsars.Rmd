@@ -40,7 +40,7 @@ normalize <- function(x) {
 
 
 ```{r}
-data_n <- as.data.frame(lapply(data[c(1:ncol(data)-1)], normalize))
+data_n <- as.data.frame(lapply(data[1:ncol(data)-1], normalize))
 data_n$V9 <- data$V9
 str(data_n)
 ```
@@ -75,11 +75,30 @@ removeOutliers <- function(data,n=3){
 
 
 ```{r}
-data_n <- subset(data_n,select=c("V1","V2","V3","V6","V7","V8","V9"))
+#data_n <- subset(data_n,select=c("V1","V2","V3","V6","V7","V8","V9"))
 
 filters = removeOutliers(data_n[1:ncol(data_n)-1],n=3)
 data_clean <- subset(data_n,filters)
 ```
+
+
+```{r}
+res.pca <- princomp(data_n, cor = FALSE, scores = TRUE)
+```
+
+```{r}
+library(factoextra)
+fviz_eig(res.pca)
+```
+
+```{r}
+fviz_pca_ind(res.pca,
+             col.ind = "cos2", # Color by the quality of representation
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE     # Avoid text overlapping
+             )
+```
+
 
 
 ```{r}
@@ -100,15 +119,15 @@ title("Perceptions of Probability")
 
 ```{r}
 # Plot our dataset.
-plot(data_clean[, 1:ncol(data_clean)-1], col = data_clean$V9, pch = 18, main = "Fisher's Wine Dataset")
+plot(data_clean[, 1:ncol(data_clean)-1], col = data_clean$V9, pch = 18, main = "Dataset")
 ```
 
 ```{r}
 # Mclust comes with a method of hierarchical clustering. 
 library(mclust)
 # initialize 3 different classes.
-initialk <- mclust::hc(data = data_clean, modelName = "EII")
-initialk <- mclust::hclass(initialk,2)
+#initialk <- mclust::hc(data = data_clean, modelName = "EII")
+#initialk <- mclust::hclass(initialk,2)
 ```
 
 ```{r echo=TRUE}
@@ -125,7 +144,7 @@ mcl.model$parameters$mean
 ```{r}
 table(mcl.model$classification, data_clean$V9)
 ```
-```
+
 ```{r}
 set.seed(20)
 DataCluster <- kmeans(data_clean[, 1:ncol(data_clean)-1], 2, nstart = 20)
@@ -134,15 +153,5 @@ DataCluster
 
 
 ```{r}
-```
-
-
-```{r}
 table(DataCluster$cluster, data_clean$V9)
-```
-
-```{r echo=TRUE}
-set.seed(20)
-DataCluster <- kmeans(data_clean[, 1:ncol(data_clean)-1], 3, nstart = 20)
-DataCluster
 ```
