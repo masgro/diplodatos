@@ -1,4 +1,4 @@
-FROM jupyter/scipy-notebook
+FROM jupyter/base-notebook
 
 USER root
 

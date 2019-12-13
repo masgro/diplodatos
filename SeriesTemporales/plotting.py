@@ -23,6 +23,23 @@ def plot_components_x13(results, label=''):
     fig.subplots_adjust(top=0.9)
     return fig, ax
 
+def plot_components_basic(results, label=''):
+    colours=['#D62728', '#FF7F0E', '#2CA02C', '#1F77B4']
+    fig, ax = plt.subplots(2,2, figsize=(12,8))
+    ax[0,0].plot(results.observed, color=colours[0], alpha=0.95)
+    ax[0,0].set(ylabel=label, title='Observed')
+    ax[0,1].plot(results.trend, color=colours[1], alpha=0.95)
+    ax[0,1].set(title='Trend')
+    ax[1,0].plot(results.seasonal, color=colours[2],  alpha=0.95)
+    ax[1,0].set(ylabel=label, title='Seasonal')
+    ax[1,1].plot(results.resid, color=colours[3],  alpha=0.95)
+    ax[1,1].set(title='Irregular')
+    sns.despine()
+    fig.suptitle('Time series decomposition  (X-13 ARIMA-SEATS)', fontsize=13.5)   
+    fig.tight_layout()
+    fig.subplots_adjust(top=0.9)
+    return fig, ax
+
 def fanchart(y, forecast, intv1, intv2, intv3):
     assert type(y)==pd.core.series.Series, 'The time series must be a pandas series'
     assert type(forecast)==pd.core.series.Series, 'The forecast must be a pandas series'
